@@ -3762,7 +3762,12 @@ export class Agent<
    * @internal
    */
   __resetToOriginalModel() {
-    this.model = Array.isArray(this.#originalModel) ? [...this.#originalModel] : this.#originalModel;
+    const originalModel = this.#originalModel;
+    if (Array.isArray(originalModel)) {
+      this.model = [...originalModel];
+      return;
+    }
+    this.model = originalModel;
   }
 
   /**
