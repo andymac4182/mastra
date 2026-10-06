@@ -14,6 +14,25 @@ export function getSpanDurationMs(
 }
 
 /**
+ * The span a trace is summarized by: the earliest span without a parent. A trace
+ * can hold several (a request served for another service's span joins that
+ * service's trace as its own top-level span), and the one that started the
+ * trace is the first.
+ */
+export function findTraceRootSpan<T extends { parentSpanId?: string | null; startedAt: Date | string }>(
+  spans: T[] | undefined,
+): T | undefined {
+  let root: T | undefined;
+  for (const span of spans ?? []) {
+    if (span.parentSpanId != null) continue;
+    if (!root || (toDate(span.startedAt)?.getTime() ?? Infinity) < (toDate(root.startedAt)?.getTime() ?? Infinity)) {
+      root = span;
+    }
+  }
+  return root;
+}
+
+/**
  * Extract a truncated text preview from a span's input field.
  * Agent traces store `input` as an array of message objects.
  * Returns the text content of all user messages joined, truncated to maxLength.

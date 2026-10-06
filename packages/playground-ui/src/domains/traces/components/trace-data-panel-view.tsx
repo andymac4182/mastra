@@ -24,6 +24,7 @@ import { TraceIdButton } from './trace-id-button';
 import { TraceSpanTimeline } from './trace-span-timeline';
 import { TraceSpanTree } from './trace-span-tree';
 import { TraceSummaryDescription } from './trace-summary-description';
+import { findTraceRootSpan } from '@/domains/traces/utils';
 import { Button } from '@/ds/components/Button';
 import { ButtonsGroup } from '@/ds/components/ButtonsGroup';
 import { DataPanel } from '@/ds/components/DataPanel';
@@ -301,7 +302,7 @@ export function TraceDataPanelView({
   }, [hierarchicalSpans]);
 
   const rootSpan = useMemo(
-    () => (anchorSpanId ? spans?.find(s => s.spanId === anchorSpanId) : spans?.find(s => s.parentSpanId == null)),
+    () => (anchorSpanId ? spans?.find(s => s.spanId === anchorSpanId) : findTraceRootSpan(spans)),
     [spans, anchorSpanId],
   );
   const handleSpanClick = (id: string) => {

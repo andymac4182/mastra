@@ -923,6 +923,21 @@ app.post('/api/analyze', async (req, res) => {
 
 This creates a single distributed trace that includes both the HTTP request handling and the Mastra agent execution, viewable in your observability platform of choice.
 
+### MCP calls
+
+Trace context crosses Model Context Protocol (MCP) calls without any setup. When an agent or workflow calls a tool through `MCPClient`, the client sends the W3C `traceparent` of the tool call span with the request. An `MCPServer` that receives a `traceparent` continues that trace, so the tool call and the work the server did for it share one trace ID:
+
+```text
+Agent service                               MCP server service
+agent run: 'support-agent'
+└── mcp_tool: 'orders_lookupOrder'  ──────► tools/call lookupOrder (same trace)
+                                            └── agent run: 'order-summarizer'
+```
+
+This also works with non-Mastra software on either side. An `MCPServer` continues the trace of any caller that sends `traceparent` in the request `_meta` or as an HTTP header, and any MCP server can read the `traceparent` that `MCPClient` sends.
+
+Each service exports its own spans, so send both to the same observability platform to see them together. See the [`MCPServer` reference](/reference/tools/mcp-server#continuing-the-callers-trace) for sampling behavior and the [`MCPClient` reference](/reference/tools/mcp-client) for the `traceContext` option.
+
 ## What gets traced
 
 Mastra automatically creates spans for:

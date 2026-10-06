@@ -57,9 +57,11 @@ import type { StdioServerHandle } from '@modelcontextprotocol/server/stdio';
 
 import { JSON_SCHEMA_2020_12, toJsonSchema2020 } from '../shared/json-schema-dialect';
 import { withMastraToolStrictMeta } from '../shared/mastra-tool-meta';
+import { withoutTraceContext } from '../shared/trace-context';
 import { ServerPromptActions, ServerResourceActions, ServerToolActions } from './actions';
 import {
   INPUT_KEY,
+  callerSpan,
   hashArguments,
   principalOf,
   readContinuation,
@@ -88,6 +90,15 @@ export interface MCPServerConfig extends CoreMCPServerConfig {
   cacheHints?: MCPServerCacheHints;
   /** Integrity protection for `input_required` continuation state. */
   requestState?: MCPServerRequestStateOptions;
+  /**
+   * Whether a request that continues a caller's trace follows the caller's
+   * sampling decision. When the caller's `traceparent` is marked not sampled,
+   * the request is not traced either. Set to `false` to let this server's own
+   * sampling configuration decide for every request.
+   *
+   * @default true
+   */
+  followCallerSampling?: boolean;
 }
 
 export interface MCPServerHTTPOptions {
@@ -166,6 +177,7 @@ export class MCPServer extends MCPServerBase {
   private readonly jsonSchemaValidator?: jsonSchemaValidator;
   private readonly cacheHints?: MCPServerCacheHints;
   private readonly mapAuthInfoToUser?: MCPAuthInfoToUserMapper;
+  private readonly followCallerSampling: boolean;
   private readonly fga?: MCPServerFGAConfig;
   private readonly requestStateCodec: RequestStateCodec<ContinuationEnvelope>;
 
@@ -179,6 +191,7 @@ export class MCPServer extends MCPServerBase {
     this.jsonSchemaValidator = config.jsonSchemaValidator;
     this.cacheHints = config.cacheHints;
     this.mapAuthInfoToUser = config.mapAuthInfoToUser;
+    this.followCallerSampling = config.followCallerSampling ?? true;
     this.fga = config.fga;
     this.promptOptions = config.prompts;
     this.resourceOptions = config.resources;
@@ -587,6 +600,7 @@ export class MCPServer extends MCPServerBase {
       | undefined;
     const target = params?.name ?? params?.uri;
     const targetName = typeof target === 'string' ? target : undefined;
+    const caller = connection?.ctx ? callerSpan(connection.ctx) : undefined;
 
     return getOrCreateSpan({
       type: SpanType.MCP_SERVER_REQUEST,
@@ -594,7 +608,7 @@ export class MCPServer extends MCPServerBase {
       entityType: EntityType.MCP_SERVER,
       entityId: this.id,
       entityName: this.name,
-      input: params,
+      input: withoutTraceContext(params),
       attributes: {
         mcpMethod: method,
         targetName,
@@ -605,6 +619,9 @@ export class MCPServer extends MCPServerBase {
         clientVersion: client?.version,
       },
       tracingContext: {},
+      // A request that names its caller's span continues that trace.
+      tracingOptions: caller && { traceId: caller.traceId, parentSpanId: caller.spanId },
+      parentSampled: this.followCallerSampling ? caller?.sampled : undefined,
       requestContext: connection?.requestContext,
       mastra: this.mastra,
     });

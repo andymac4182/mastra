@@ -135,7 +135,16 @@ export function resolveExportedSpanId(
  * @returns The created Span or undefined if tracing is disabled
  */
 export function getOrCreateSpan<T extends SpanType>(options: GetOrCreateSpanOptions<T>): Span<T> | undefined {
-  const { type, attributes, tracingContext, requestContext, tracingOptions, resumedFromSpanId, ...rest } = options;
+  const {
+    type,
+    attributes,
+    tracingContext,
+    requestContext,
+    tracingOptions,
+    resumedFromSpanId,
+    parentSampled,
+    ...rest
+  } = options;
 
   // tracingOptions.metadata takes precedence, but a key it merely names with
   // an `undefined` value must not erase the span's own metadata value.
@@ -171,6 +180,7 @@ export function getOrCreateSpan<T extends SpanType>(options: GetOrCreateSpanOpti
     // tracingOptions.parentSpanId is the public external-correlation channel;
     // the id belongs to the caller's tracing system, not Mastra's own parentage.
     externalParentSpanId: tracingOptions?.parentSpanId,
+    parentSampled,
     customSamplerOptions: {
       requestContext,
       metadata,

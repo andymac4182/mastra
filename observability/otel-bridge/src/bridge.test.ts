@@ -170,6 +170,56 @@ describe('OtelBridge', () => {
         await bridge.shutdown();
       });
 
+      it('keeps an ambient span of the caller trace as the OTel parent of a root that continues that trace', () => {
+        const bridge = new OtelBridge();
+
+        // HTTP instrumentation read the same `traceparent` and opened a server span.
+        const ambient = trace.getTracer('ambient').startSpan('POST /mcp');
+        const result = context.with(trace.setSpan(context.active(), ambient), () =>
+          bridge.createSpan({
+            type: SpanType.MCP_SERVER_REQUEST,
+            name: 'tools/call weather',
+            attributes: {},
+            traceId: ambient.spanContext().traceId,
+            externalParentSpanId: '1a2b3c4d5e6f7081',
+          }),
+        );
+        ambient.end();
+
+        expect(result?.traceId).toBe(ambient.spanContext().traceId);
+        expect(result?.externalParentSpanId).toBe(ambient.spanContext().spanId);
+
+        bridge.shutdown();
+      });
+
+      it('continues the caller trace instead of an ambient span from another trace', async () => {
+        const bridge = new OtelBridge();
+        const instance = new DefaultObservabilityInstance({
+          serviceName: 'continued-over-ambient',
+          name: 'continued-over-ambient-instance',
+          sampling: { type: SamplingStrategyType.ALWAYS },
+          bridge,
+        });
+
+        const ambient = trace.getTracer('ambient').startSpan('unrelated-work');
+        const span = context.with(trace.setSpan(context.active(), ambient), () =>
+          instance.startSpan({
+            type: SpanType.GENERIC,
+            name: 'served-request',
+            tracingOptions: { traceId: 'a1b2c3d4e5f60718293a4b5c6d7e8f90', parentSpanId: '1a2b3c4d5e6f7081' },
+          }),
+        )!;
+        ambient.end();
+
+        const exported = span.exportSpan();
+        expect(exported.traceId).toBe('a1b2c3d4e5f60718293a4b5c6d7e8f90');
+        expect(exported.externalParentSpanId).toBe('1a2b3c4d5e6f7081');
+
+        span.end();
+        await instance.flush();
+        await bridge.shutdown();
+      });
+
       it('classifies a Mastra-created ambient span as an internal parent', async () => {
         // executeInContext runs code inside a Mastra span's OTel context. A
         // root created there inherits that span as its ambient parent — but
@@ -292,6 +342,50 @@ describe('OtelBridge', () => {
         expect(result?.traceId).toMatch(/^[0-9a-f]{32}$/);
         expect(result?.traceId).not.toBe('not-a-valid-trace-id');
         expect(result?.parentSpanId).toBeUndefined();
+
+        bridge.shutdown();
+      });
+    });
+
+    // A root span started with `tracingOptions.traceId` + `parentSpanId` names a
+    // span in the caller's process (for example an MCP request that carried a
+    // `traceparent`). The bridge must join that trace rather than start a new one.
+    describe('when continuing a caller trace', () => {
+      const callerTraceId = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
+      const callerSpanId = '1a2b3c4d5e6f7081';
+
+      it('parents the root span under the caller span and reports it as external', () => {
+        const bridge = new OtelBridge();
+
+        const result = bridge.createSpan({
+          type: SpanType.MCP_SERVER_REQUEST,
+          name: 'tools/call weather',
+          attributes: {},
+          traceId: callerTraceId,
+          externalParentSpanId: callerSpanId,
+        });
+
+        expect(result?.traceId).toBe(callerTraceId);
+        expect(result?.externalParentSpanId).toBe(callerSpanId);
+        expect(result?.parentSpanId).toBeUndefined();
+        expect(result?.spanId).not.toBe(callerSpanId);
+
+        bridge.shutdown();
+      });
+
+      it('ignores malformed caller IDs and starts a fresh trace', () => {
+        const bridge = new OtelBridge();
+
+        const result = bridge.createSpan({
+          type: SpanType.MCP_SERVER_REQUEST,
+          name: 'tools/call weather',
+          attributes: {},
+          traceId: 'not-a-valid-trace-id',
+          externalParentSpanId: 'nope',
+        });
+
+        expect(result?.traceId).toMatch(/^[0-9a-f]{32}$/);
+        expect(result?.externalParentSpanId).toBeUndefined();
 
         bridge.shutdown();
       });

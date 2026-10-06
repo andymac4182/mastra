@@ -13,6 +13,7 @@ import { TraceThreadItemView } from '@/domains/traces/components/trace-thread-it
 import { TracesErrorContent } from '@/domains/traces/components/traces-error-content';
 import { useTracesListSource } from '@/domains/traces/hooks/use-traces-list-source';
 import type { UseTracesListSourceArgs } from '@/domains/traces/hooks/use-traces-list-source';
+import { findTraceRootSpan } from '@/domains/traces/utils';
 import { Button } from '@/ds/components/Button';
 import { Txt } from '@/ds/components/Txt';
 import { Icon } from '@/ds/icons/Icon';
@@ -142,7 +143,7 @@ function ThreadTraceRowContent({
   const traceHref = paths.traceLink(traceId);
   // Same query the span tree observes (passive: the tree drives refetches).
   const { data: traceData } = useTraceSpans({ traceId: traceId, passive: true, queryOptions: { enabled: !!traceId } });
-  const rootSpanId = traceData?.spans.find(span => span.parentSpanId == null)?.spanId;
+  const rootSpanId = findTraceRootSpan(traceData?.spans)?.spanId;
 
   return (
     <>

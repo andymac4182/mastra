@@ -1145,6 +1145,12 @@ interface StartSpanOptions<TType extends SpanType> {
 
   /** Options passed when using a custom sampler strategy */
   customSamplerOptions?: CustomSamplerOptions
+
+  /**
+   * Sampling decision of the remote span this trace continues. `false` records
+   * nothing for the trace; otherwise the configured sampler decides.
+   */
+  parentSampled?: boolean
 }
 ```
 

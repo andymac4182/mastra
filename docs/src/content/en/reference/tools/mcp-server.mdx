@@ -166,6 +166,14 @@ The constructor accepts an `MCPServerConfig` object with the following propertie
       'Integrity protection for `input_required` continuation state. `key` is an HMAC key of at least 32 bytes that every instance able to answer a continuation must share; `ttlSeconds` (default 600) is how long a suspended round stays answerable. Without a key the server generates one per process. See the Asking the caller for input section.',
   },
   {
+    name: 'followCallerSampling',
+    type: 'boolean',
+    isOptional: true,
+    defaultValue: 'true',
+    description:
+      "Whether a request that continues a caller's trace follows the caller's sampling decision. When the caller marks its trace as not sampled, the request isn't traced. Set to `false` to let the server's own sampling configuration decide for every request. See the Tracing section.",
+  },
+  {
     name: 'cacheHints',
     type: 'MCPServerCacheHints',
     isOptional: true,
@@ -1019,6 +1027,31 @@ When the server is registered on a `Mastra` instance that has observability conf
 The span is named after the method and target (for example `tools/call lookupOrder`). It stores the request params as input and the response as output, and records the server name and version, the negotiated protocol version, and the client name and version when the client reported them. A `tools/call` that returns `isError: true` fails the span. Agents and workflows exposed as tools attach their `AGENT_RUN` and `WORKFLOW_RUN` spans under it. A served tool doesn't get its own `TOOL_CALL` span. Tools an agent calls inside the request still do.
 
 A standalone `MCPServer` with no `mastra` instance produces no spans.
+
+### Continuing the caller's trace
+
+A request that carries a W3C `traceparent` continues the caller's trace instead of starting a new one. The request span takes the caller's trace ID and records the caller's span as its external parent, so the caller's work and the server's work appear as one trace in your observability platform.
+
+The server reads `traceparent` from two places, in this order:
+
+1. The request `_meta`. `MCPClient` sends it there for every tool call an agent or workflow makes, over HTTP and stdio.
+1. The `traceparent` HTTP header. OpenTelemetry HTTP instrumentation in a non-Mastra caller sends it there.
+
+A request without a valid `traceparent` starts its own trace. The trace fields are left out of the span input.
+
+The caller and the server each export their own spans. To see one trace, send both to the same observability platform, or use [`OtelBridge`](/integrations/observability/opentelemetry#bridge) on both sides.
+
+When the caller marks its trace as not sampled, the server doesn't trace the request either. To trace every request regardless of the caller, set `followCallerSampling` to `false`:
+
+```typescript
+const server = new MCPServer({
+  id: 'orders-server',
+  name: 'Orders Server',
+  version: '1.0.0',
+  tools: { lookupOrder },
+  followCallerSampling: false,
+})
+```
 
 ## Notification delivery
 

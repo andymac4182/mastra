@@ -117,6 +117,13 @@ Start a new span of a specific SpanType. Creates the root span of a trace if no 
     description: 'Options for custom sampler',
     required: false,
   },
+  {
+    name: 'parentSampled',
+    type: 'boolean',
+    description:
+      'Sampling decision of the remote span this trace continues. `false` records nothing for the trace; otherwise the configured sampler decides.',
+    required: false,
+  },
 ]}
 />
 

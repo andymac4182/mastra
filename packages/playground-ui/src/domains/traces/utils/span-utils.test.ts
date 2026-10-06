@@ -1,6 +1,12 @@
 import type { SpanRecord } from '@mastra/core/storage';
 import { describe, expect, it } from 'vitest';
-import { getSpanDurationMs, getInputPreview, getTokenLimitMessage, isTokenLimitExceeded } from './span-utils';
+import {
+  findTraceRootSpan,
+  getSpanDurationMs,
+  getInputPreview,
+  getTokenLimitMessage,
+  isTokenLimitExceeded,
+} from './span-utils';
 
 const START = new Date('2026-01-01T00:00:00.000Z');
 const at = (offsetMs: number) => new Date(START.getTime() + offsetMs);
@@ -17,6 +23,22 @@ describe('getSpanDurationMs', () => {
     expect(getSpanDurationMs(null, START)).toBeUndefined();
     expect(getSpanDurationMs('not-a-date', START)).toBeUndefined();
     expect(getSpanDurationMs(at(1000), START)).toBeUndefined();
+  });
+});
+
+describe('findTraceRootSpan', () => {
+  it('picks the earliest top-level span, whatever order the spans arrive in', () => {
+    const agentRun = { spanId: 'agent', parentSpanId: null, startedAt: at(0) };
+    const servedRequest = { spanId: 'request', parentSpanId: null, startedAt: at(500).toISOString() };
+    const child = { spanId: 'child', parentSpanId: 'agent', startedAt: at(-100) };
+
+    expect(findTraceRootSpan([servedRequest, child, agentRun])).toBe(agentRun);
+    expect(findTraceRootSpan([agentRun, servedRequest, child])).toBe(agentRun);
+  });
+
+  it('returns undefined when no span is top-level', () => {
+    expect(findTraceRootSpan([{ parentSpanId: 'missing', startedAt: START }])).toBeUndefined();
+    expect(findTraceRootSpan(undefined)).toBeUndefined();
   });
 });
 

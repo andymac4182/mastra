@@ -213,6 +213,22 @@ export class OtelBridge extends BaseExporter implements ObservabilityBridge {
           parentOtelContext = otelTrace.setSpanContext(parentOtelContext, candidate);
           usedPersistedParent = true;
         }
+      } else if (options.traceId && options.externalParentSpanId) {
+        // Root spans that continue a caller's trace (`tracingOptions.traceId` +
+        // `parentSpanId`, e.g. an MCP request carrying a `traceparent`) name a span
+        // from another process. Parent under it so the span joins the caller's
+        // trace. An active span already in that trace (HTTP instrumentation that
+        // read the same header) is the closer parent, so it is kept.
+        const candidate = {
+          traceId: options.traceId,
+          spanId: options.externalParentSpanId,
+          traceFlags: TraceFlags.SAMPLED,
+          isRemote: true,
+        };
+        const active = otelTrace.getSpanContext(parentOtelContext);
+        if (isSpanContextValid(candidate) && active?.traceId !== options.traceId) {
+          parentOtelContext = otelTrace.setSpanContext(parentOtelContext, candidate);
+        }
       }
 
       // Create OTEL span with SpanKind (must be set at creation, immutable)

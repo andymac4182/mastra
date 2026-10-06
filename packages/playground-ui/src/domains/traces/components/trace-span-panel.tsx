@@ -8,6 +8,7 @@ import { TraceMessagesPanel } from '@/domains/traces/components/trace-messages-p
 import { getTraceThreadId } from '@/domains/traces/components/trace-thread-context';
 import { TraceThreadPanel } from '@/domains/traces/components/trace-thread-panel';
 import { useTraceSpanNavigation } from '@/domains/traces/hooks/use-trace-span-navigation';
+import { findTraceRootSpan } from '@/domains/traces/utils';
 import { Button } from '@/ds/components/Button';
 import { useLinkComponent } from '@/lib/framework';
 import type { LinkComponentPaths } from '@/lib/framework';
@@ -142,9 +143,7 @@ export function TraceSpanPanel({
   const { Link, paths } = useLinkComponent();
 
   // The trace summary links the entity to its page; the app's link provider owns the routes.
-  const rootSpan = anchorSpanId
-    ? spans?.find(s => s.spanId === anchorSpanId)
-    : spans?.find(s => s.parentSpanId == null);
+  const rootSpan = anchorSpanId ? spans?.find(s => s.spanId === anchorSpanId) : findTraceRootSpan(spans);
   const entityHref = getEntityHref(paths, rootSpan?.entityType, rootSpan?.entityId);
   const threadId = getTraceThreadId(rootSpan, anchorSpanId);
   const hasMessagesPanel = !!(traceId && showPartialThread && threadId);

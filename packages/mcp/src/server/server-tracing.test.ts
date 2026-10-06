@@ -7,7 +7,7 @@ import { Observability } from '@mastra/observability';
 import type { Client } from '@modelcontextprotocol/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod/v4';
-import { connectClient, serveHTTP } from './__tests__/harness.mock';
+import { connectClient, serveHTTP, textOf } from './__tests__/harness.mock';
 import type { ServedHTTP } from './__tests__/harness.mock';
 import { MCPServer } from './server';
 
@@ -114,6 +114,139 @@ describe('MCPServer tracing', () => {
     const { _meta, ...rest } = result as Record<string, unknown>;
     return rest;
   };
+
+  describe('caller trace context', () => {
+    const CALLER_TRACE = '0af7651916cd43dd8448eb211c80319c';
+    const CALLER_SPAN = 'b7ad6b7169203331';
+    const traceparent = (flags = '01') => `00-${CALLER_TRACE}-${CALLER_SPAN}-${flags}`;
+    const callEcho = (target: Client = client, meta?: Record<string, unknown>) =>
+      target.callTool({ name: 'echoTool', arguments: { message: 'hi' }, ...(meta ? { _meta: meta } : {}) });
+
+    it('continues the trace named by `_meta.traceparent`', async () => {
+      await callEcho(client, { traceparent: traceparent() });
+
+      const span = requestSpans()[0];
+      expect(span.traceId).toBe(CALLER_TRACE);
+      expect(span.externalParentSpanId).toBe(CALLER_SPAN);
+      // The caller's span lives in another process, so this is still the root here.
+      expect(span.isRootSpan).toBe(true);
+      expect(span.parentSpanId).toBeUndefined();
+    });
+
+    it('records the request input without the trace fields', async () => {
+      await callEcho(client, {
+        traceparent: traceparent(),
+        tracestate: 'vendor=1',
+        baggage: 'tenant=one',
+        custom: true,
+      });
+      await callEcho(client, { traceparent: traceparent() });
+
+      expect(requestSpans()[0].input).toEqual({
+        name: 'echoTool',
+        arguments: { message: 'hi' },
+        _meta: { custom: true },
+      });
+      expect(requestSpans()[1].input).toEqual({ name: 'echoTool', arguments: { message: 'hi' } });
+    });
+
+    it('continues the trace named by the HTTP `traceparent` header', async () => {
+      const headerClient = await connectClient(served.url, {}, { traceparent: traceparent() });
+      try {
+        endedSpans.length = 0;
+        await callEcho(headerClient);
+      } finally {
+        await headerClient.close();
+      }
+
+      const span = requestSpans()[0];
+      expect(span.traceId).toBe(CALLER_TRACE);
+      expect(span.externalParentSpanId).toBe(CALLER_SPAN);
+    });
+
+    it('prefers `_meta.traceparent` over the HTTP header', async () => {
+      const headerClient = await connectClient(
+        served.url,
+        {},
+        { traceparent: '00-11111111111111111111111111111111-2222222222222222-01' },
+      );
+      try {
+        endedSpans.length = 0;
+        await callEcho(headerClient, { traceparent: traceparent() });
+      } finally {
+        await headerClient.close();
+      }
+
+      expect(requestSpans()[0].traceId).toBe(CALLER_TRACE);
+    });
+
+    it.each([
+      ['not a traceparent', 'garbage'],
+      ['an all-zero trace id', `00-${'0'.repeat(32)}-${CALLER_SPAN}-01`],
+      ['an all-zero span id', `00-${CALLER_TRACE}-${'0'.repeat(16)}-01`],
+      ['an invalid version', `ff-${CALLER_TRACE}-${CALLER_SPAN}-01`],
+      ['uppercase hex', `00-${CALLER_TRACE.toUpperCase()}-${CALLER_SPAN}-01`],
+      ['a non-string value', 42],
+    ])('starts its own trace when `traceparent` is %s', async (_label, value) => {
+      await callEcho(client, { traceparent: value });
+
+      const span = requestSpans()[0];
+      expect(span.traceId).toMatch(/^[0-9a-f]{32}$/);
+      expect(span.traceId).not.toBe(CALLER_TRACE);
+      expect(span.externalParentSpanId).toBeUndefined();
+    });
+
+    it('records nothing for a caller whose trace is not sampled', async () => {
+      const result = await callEcho(client, { traceparent: traceparent('00') });
+
+      expect(textOf(result)).toContain('hi');
+      expect(endedSpans).toHaveLength(0);
+    });
+
+    it('traces an unsampled caller when `followCallerSampling` is off', async () => {
+      const independent = new MCPServer({
+        id: 'independent-sampling',
+        name: 'Independent Sampling',
+        version: '1.0.0',
+        tools: { echoTool: tools.echoTool },
+        followCallerSampling: false,
+      });
+      const independentSpans: any[] = [];
+      new Mastra({
+        logger: false,
+        mcpServers: { independent },
+        observability: new Observability({
+          configs: {
+            default: {
+              serviceName: 'mcp-sampling-test',
+              exporters: [
+                {
+                  name: 'sampling-collector',
+                  async exportTracingEvent(event: { type: string; exportedSpan?: any }) {
+                    if (event.type === TracingEventType.SPAN_ENDED) independentSpans.push(event.exportedSpan);
+                  },
+                  async flush() {},
+                  async shutdown() {},
+                },
+              ],
+            },
+          },
+        }),
+      });
+      const independentHttp = await serveHTTP(independent);
+      try {
+        const independentClient = await connectClient(independentHttp.url);
+        await callEcho(independentClient, { traceparent: traceparent('00') });
+        await independentClient.close();
+
+        const span = independentSpans.find(s => s.type === SpanType.MCP_SERVER_REQUEST);
+        expect(span.traceId).toBe(CALLER_TRACE);
+        expect(span.externalParentSpanId).toBe(CALLER_SPAN);
+      } finally {
+        await independentHttp.close();
+      }
+    });
+  });
 
   it('records one root request span for a served tool call, and no separate tool span', async () => {
     const result = await client.callTool({ name: 'echoTool', arguments: { message: 'hi' } });

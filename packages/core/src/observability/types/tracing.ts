@@ -1845,6 +1845,12 @@ export interface StartSpanOptions<TType extends SpanType> extends CreateSpanOpti
   customSamplerOptions?: CustomSamplerOptions;
   /** Tracing options for this execution */
   tracingOptions?: TracingOptions;
+  /**
+   * Sampling decision of the remote span this trace continues. `false` records
+   * nothing for the trace; otherwise the configured sampler decides.
+   * Only used for root spans without a parent.
+   */
+  parentSampled?: boolean;
 }
 
 /**
@@ -1934,6 +1940,11 @@ export interface GetOrCreateSpanOptions<TType extends SpanType> {
    * span within the trace, so it becomes the new root span's parent.
    */
   resumedFromSpanId?: string;
+  /**
+   * Sampling decision of the remote span named by `tracingOptions.parentSpanId`.
+   * `false` records nothing for the trace; otherwise the configured sampler decides.
+   */
+  parentSampled?: boolean;
 }
 
 /**

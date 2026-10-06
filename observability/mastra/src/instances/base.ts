@@ -212,7 +212,7 @@ export abstract class BaseObservabilityInstance extends MastraBase implements Ob
    * See: https://github.com/mastra-ai/mastra/issues/11504
    */
   startSpan<TType extends SpanType>(options: StartSpanOptions<TType>): Span<TType> {
-    const { customSamplerOptions, requestContext, metadata, tracingOptions, ...rest } = options;
+    const { customSamplerOptions, requestContext, metadata, tracingOptions, parentSampled, ...rest } = options;
 
     // Determine sampling: inherit from parent or make new decision for root spans
     if (options.parent) {
@@ -223,8 +223,9 @@ export abstract class BaseObservabilityInstance extends MastraBase implements Ob
       }
       // Parent is valid (sampled), so child will also be sampled - continue to create actual span
     } else {
-      // Root span: perform sampling check
-      if (!this.shouldSample(customSamplerOptions)) {
+      // Root span: an unsampled remote parent keeps the trace unsampled here too;
+      // otherwise perform the sampling check
+      if (parentSampled === false || !this.shouldSample(customSamplerOptions)) {
         return new NoOpSpan<TType>({ ...rest, metadata }, this);
       }
     }

@@ -359,6 +359,57 @@ describe('Trace-Level Sampling (Issue #11504)', () => {
     });
   });
 
+  describe('Remote parent sampling', () => {
+    it('should not sample a trace whose remote parent is not sampled', () => {
+      const tracing = new DefaultObservabilityInstance({
+        serviceName: 'test-service',
+        name: 'test-instance',
+        sampling: { type: SamplingStrategyType.ALWAYS },
+        exporters: [testExporter],
+      });
+
+      const rootSpan = tracing.startSpan({
+        type: SpanType.MCP_SERVER_REQUEST,
+        name: 'tools/call weather',
+        attributes: { mcpMethod: 'tools/call' },
+        tracingOptions: { traceId: 'a1b2c3d4e5f60718293a4b5c6d7e8f90', parentSpanId: '1a2b3c4d5e6f7081' },
+        parentSampled: false,
+      });
+      const childSpan = rootSpan.createChildSpan({
+        type: SpanType.TOOL_CALL,
+        name: 'tool-1',
+        attributes: { toolId: 'tool-1' },
+      });
+      childSpan.end({});
+      rootSpan.end({});
+
+      expect(rootSpan.isValid).toBe(false);
+      expect(childSpan.isValid).toBe(false);
+      expect(testExporter.events).toHaveLength(0);
+    });
+
+    it('should leave the decision to the sampler when the remote parent is sampled', () => {
+      const samplerMock = vi.fn().mockReturnValue(false);
+      const tracing = new DefaultObservabilityInstance({
+        serviceName: 'test-service',
+        name: 'test-instance',
+        sampling: { type: SamplingStrategyType.CUSTOM, sampler: samplerMock },
+        exporters: [testExporter],
+      });
+
+      const rootSpan = tracing.startSpan({
+        type: SpanType.MCP_SERVER_REQUEST,
+        name: 'tools/call weather',
+        attributes: { mcpMethod: 'tools/call' },
+        parentSampled: true,
+      });
+      rootSpan.end({});
+
+      expect(samplerMock).toHaveBeenCalledTimes(1);
+      expect(rootSpan.isValid).toBe(false);
+    });
+  });
+
   describe('Mixed Scenarios', () => {
     it('should handle deep nesting with consistent sampling', () => {
       const tracing = new DefaultObservabilityInstance({
