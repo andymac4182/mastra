@@ -436,8 +436,7 @@ export async function createWorkspaceTools(
   const tools: Record<string, any> = {};
   const toolsConfig = workspace.getToolsConfig();
   if (
-    toolsConfig?.experimentalSkipDisabledToolPreparation === true &&
-    toolsConfig.enabled === false &&
+    toolsConfig?.enabled === false &&
     Object.values(WORKSPACE_TOOLS).every(group =>
       Object.values(group).every(name => {
         const enabled = toolsConfig[name]?.enabled;

@@ -21,8 +21,7 @@ const samplingOptions = {
 it.skipIf(process.env.MASTRA_WORKSPACE_LOAD_PROFILE !== 'true')(
   'profiles 50 concurrent sessions for 101 turns',
   async () => {
-    const optimized = process.env.MASTRA_SKIP_DISABLED_TOOL_PREPARATION === 'true';
-    const directory = await mkdtemp(join(tmpdir(), optimized ? 'mastra-tools-after-' : 'mastra-tools-before-'));
+    const directory = await mkdtemp(join(tmpdir(), 'mastra-disabled-tools-'));
     const inspector = new Session();
     inspector.connect();
     const delay = monitorEventLoopDelay({ resolution: 20 });
@@ -76,7 +75,7 @@ it.skipIf(process.env.MASTRA_WORKSPACE_LOAD_PROFILE !== 'true')(
           memory: new MockMemory(),
           workspace: new Workspace({
             filesystem: new LocalFilesystem({ basePath: directory }),
-            tools: { enabled: false, experimentalSkipDisabledToolPreparation: optimized },
+            tools: { enabled: false },
           }),
         }),
       };
@@ -116,7 +115,6 @@ it.skipIf(process.env.MASTRA_WORKSPACE_LOAD_PROFILE !== 'true')(
       await writeFile(
         join(directory, 'resources.json'),
         JSON.stringify({
-          optimized,
           completed,
           samples,
           elapsedMs: performance.now() - started,

@@ -339,13 +339,6 @@ export interface ComputerToolConfig extends WorkspaceToolConfig {
  * ```
  */
 export type WorkspaceToolsConfig = {
-  /**
-   * Skip tool preparation when all tools are statically disabled.
-   * Per-tool enabled overrides and dynamic configuration retain the existing path.
-   * @experimental Defaults to false.
-   */
-  experimentalSkipDisabledToolPreparation?: boolean;
-
   /** Default: whether all tools are enabled (default: true if not specified) */
   enabled?: DynamicToolConfigValue;
 

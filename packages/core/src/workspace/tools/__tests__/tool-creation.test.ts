@@ -20,18 +20,7 @@ describe('createWorkspaceTools', () => {
     await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
   });
 
-  it('skips preparation for statically disabled tools when opted in', async () => {
-    const workspace = new Workspace({
-      filesystem: new LocalFilesystem({ basePath: tempDir }),
-      tools: { enabled: false, experimentalSkipDisabledToolPreparation: true },
-    });
-    const filesystem = vi.spyOn(workspace, 'filesystem', 'get');
-
-    expect(await createWorkspaceTools(workspace)).toEqual({});
-    expect(filesystem).not.toHaveBeenCalled();
-  });
-
-  it('keeps preparation enabled by default', async () => {
+  it('skips preparation for statically disabled tools', async () => {
     const workspace = new Workspace({
       filesystem: new LocalFilesystem({ basePath: tempDir }),
       tools: { enabled: false },
@@ -39,15 +28,24 @@ describe('createWorkspaceTools', () => {
     const filesystem = vi.spyOn(workspace, 'filesystem', 'get');
 
     expect(await createWorkspaceTools(workspace)).toEqual({});
+    expect(filesystem).not.toHaveBeenCalled();
+  });
+
+  it('prepares tools when enabled by default', async () => {
+    const workspace = new Workspace({
+      filesystem: new LocalFilesystem({ basePath: tempDir }),
+    });
+    const filesystem = vi.spyOn(workspace, 'filesystem', 'get');
+
+    expect(await createWorkspaceTools(workspace)).toHaveProperty(WORKSPACE_TOOLS.FILESYSTEM.READ_FILE);
     expect(filesystem).toHaveBeenCalled();
   });
 
-  it.each([true, () => true])('preserves per-tool enabled overrides with the optimization', async enabled => {
+  it.each([true, () => true])('preserves per-tool enabled overrides', async enabled => {
     const workspace = new Workspace({
       filesystem: new LocalFilesystem({ basePath: tempDir }),
       tools: {
         enabled: false,
-        experimentalSkipDisabledToolPreparation: true,
         [WORKSPACE_TOOLS.FILESYSTEM.READ_FILE]: { enabled },
       },
     });
@@ -55,11 +53,11 @@ describe('createWorkspaceTools', () => {
     expect(await createWorkspaceTools(workspace)).toHaveProperty(WORKSPACE_TOOLS.FILESYSTEM.READ_FILE);
   });
 
-  it('evaluates dynamic defaults with the optimization', async () => {
+  it('evaluates dynamic defaults', async () => {
     const enabled = vi.fn(() => true);
     const workspace = new Workspace({
       filesystem: new LocalFilesystem({ basePath: tempDir }),
-      tools: { enabled, experimentalSkipDisabledToolPreparation: true },
+      tools: { enabled },
     });
 
     expect(await createWorkspaceTools(workspace)).toHaveProperty(WORKSPACE_TOOLS.FILESYSTEM.READ_FILE);
