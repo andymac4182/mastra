@@ -151,6 +151,8 @@ export const FACTORY_PROJECTS_SCHEMA: CollectionSchema = {
     build_window_count: { type: 'integer', default: 0 },
     build_failure_count: { type: 'integer', default: 0 },
     build_claimed_at: { type: 'timestamp', nullable: true },
+    /** Set once the source-control domain has backfilled positions and the oldest link's sandbox onto the project. */
+    environment_backfilled_at: { type: 'timestamp', nullable: true },
     created_at: { type: 'timestamp' },
     updated_at: { type: 'timestamp' },
   },
@@ -189,6 +191,7 @@ interface FactoryProjectDbRow extends Record<string, unknown> {
   build_window_count: number | null;
   build_failure_count: number | null;
   build_claimed_at: Date | null;
+  environment_backfilled_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }

@@ -58,7 +58,6 @@ import {
 } from './session/environment-state-processor.js';
 import type { SessionEnvironmentRepositoryState } from './session/environment-state-processor.js';
 import type { FactoryProject, FactoryProjectsStorage } from './storage/domains/projects/base.js';
-import { DEFAULT_SANDBOX_CPU_COUNT, DEFAULT_SANDBOX_MEMORY_MB } from './storage/domains/source-control/base.js';
 import type { SourceControlSession, SourceControlStorageHandle } from './storage/domains/source-control/base.js';
 import type { WorkItemsStorage } from './storage/domains/work-items/base.js';
 import { parseSupervisorResourceId } from './supervisor/session.js';
@@ -414,8 +413,9 @@ export interface SessionEnvironment {
   workspaceSetupCommand: string | undefined;
   /** Only an absolute root is passed on; the templates reject anything else. */
   workingDirectory: string | undefined;
-  cpuCount: number;
-  memoryMB: number;
+  /** vCPUs and memory; null leaves the provider default (identity-bearing in the template). */
+  cpuCount: number | null;
+  memoryMB: number | null;
   /** Idle minutes before a sandbox may stop; null leaves the provider default. */
   idleTimeoutMinutes: number | null;
   /** Heads recorded on the environment's last build, by slug; null before the first. */
@@ -499,8 +499,8 @@ export async function resolveProjectEnvironment(
     repos,
     workspaceSetupCommand: project.workspaceSetupCommand?.trim() || undefined,
     workingDirectory: workdir?.startsWith('/') ? workdir : undefined,
-    cpuCount: project.sandboxCpuCount ?? DEFAULT_SANDBOX_CPU_COUNT,
-    memoryMB: project.sandboxMemoryMb ?? DEFAULT_SANDBOX_MEMORY_MB,
+    cpuCount: project.sandboxCpuCount,
+    memoryMB: project.sandboxMemoryMb,
     idleTimeoutMinutes: project.sandboxIdleTimeoutMinutes,
     recordedHeads: project.activeTemplateHeads,
   };
@@ -534,8 +534,8 @@ export function environmentSandboxContext(
     // the boot hook re-runs that setup from `setup-failed`.
     continueOnSetupFailure: true,
     ...(environment.workingDirectory ? { workingDirectory: environment.workingDirectory } : {}),
-    cpuCount: environment.cpuCount,
-    memoryMB: environment.memoryMB,
+    ...(environment.cpuCount !== null ? { cpuCount: environment.cpuCount } : {}),
+    ...(environment.memoryMB !== null ? { memoryMB: environment.memoryMB } : {}),
     ...(environment.idleTimeoutMinutes !== null ? { idleTimeoutMinutes: environment.idleTimeoutMinutes } : {}),
     ...(input.resolveHead ? { resolveHead: input.resolveHead } : {}),
   };
