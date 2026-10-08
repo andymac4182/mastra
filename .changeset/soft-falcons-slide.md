@@ -2,4 +2,4 @@
 '@mastra/core': patch
 ---
 
-Fixed unnecessary workspace tool preparation. Fully disabled static configurations skip preparation entirely; otherwise, grep and search schemas and AST availability checks run only for enabled tools. Shared read tracking and write locks are created on demand. Per-tool overrides and dynamic configuration remain supported.
+Reduced unnecessary memory allocations for agents with workspace tools. Workspaces now set up only enabled tools and skip tool setup when all tools are disabled. Per-tool `enabled` overrides and dynamic `enabled` functions continue to work as before.
