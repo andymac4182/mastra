@@ -21,6 +21,8 @@ const samplingOptions = {
 it.skipIf(process.env.MASTRA_WORKSPACE_LOAD_PROFILE !== 'true')(
   'profiles 50 concurrent sessions for 101 turns',
   async () => {
+    // Retain profiling artifacts intentionally for offline allocation analysis and before/after comparisons.
+    // The output prints this directory; remove it manually after analysis to reclaim snapshot disk space.
     const directory = await mkdtemp(join(tmpdir(), 'mastra-disabled-tools-'));
     const inspector = new Session();
     inspector.connect();
