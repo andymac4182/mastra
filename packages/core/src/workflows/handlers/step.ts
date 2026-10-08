@@ -393,6 +393,7 @@ export async function executeStep(
         };
       }
 
+      let writer: ToolStream | undefined;
       const output = await runStep({
         runId: nestedRunId ?? runId,
         resourceId,
@@ -491,15 +492,19 @@ export async function executeStep(
         [STREAM_FORMAT_SYMBOL]: executionContext.format,
         engine: engine.getEngineContext(),
         abortSignal: abortController?.signal,
-        writer: new ToolStream(
-          {
-            prefix: 'workflow-step',
-            callId: stepCallId,
-            name: step.id,
-            runId,
-          },
-          outputWriter,
-        ),
+        // Most internal agent steps never use the writer. Keep native stream
+        // allocation lazy, with one writer per execution attempt.
+        get writer() {
+          return (writer ??= new ToolStream(
+            {
+              prefix: 'workflow-step',
+              callId: stepCallId,
+              name: step.id,
+              runId,
+            },
+            outputWriter,
+          ));
+        },
         outputWriter,
         // Disable scorers must be explicitly set to false they are on by default
         scorers: disableScorers === false ? undefined : step.scorers,
