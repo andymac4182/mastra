@@ -435,6 +435,18 @@ export async function createWorkspaceTools(
   }
   const tools: Record<string, any> = {};
   const toolsConfig = workspace.getToolsConfig();
+  if (
+    toolsConfig?.experimentalSkipDisabledToolPreparation === true &&
+    toolsConfig.enabled === false &&
+    Object.values(WORKSPACE_TOOLS).every(group =>
+      Object.values(group).every(name => {
+        const enabled = toolsConfig[name]?.enabled;
+        return enabled === undefined || enabled === false;
+      }),
+    )
+  ) {
+    return tools;
+  }
   const isReadOnly = workspace.filesystem?.readOnly ?? false;
 
   // Shared write lock — serializes concurrent writes to the same file path.
