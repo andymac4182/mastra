@@ -416,6 +416,8 @@ export interface SessionEnvironment {
   workingDirectory: string | undefined;
   cpuCount: number;
   memoryMB: number;
+  /** Idle minutes before a sandbox may stop; null leaves the provider default. */
+  idleTimeoutMinutes: number | null;
   /** Heads recorded on the environment's last build, by slug; null before the first. */
   recordedHeads: Record<string, string> | null;
 }
@@ -499,6 +501,7 @@ export async function resolveProjectEnvironment(
     workingDirectory: workdir?.startsWith('/') ? workdir : undefined,
     cpuCount: project.sandboxCpuCount ?? DEFAULT_SANDBOX_CPU_COUNT,
     memoryMB: project.sandboxMemoryMb ?? DEFAULT_SANDBOX_MEMORY_MB,
+    idleTimeoutMinutes: project.sandboxIdleTimeoutMinutes,
     recordedHeads: project.activeTemplateHeads,
   };
 }
@@ -533,6 +536,7 @@ export function environmentSandboxContext(
     ...(environment.workingDirectory ? { workingDirectory: environment.workingDirectory } : {}),
     cpuCount: environment.cpuCount,
     memoryMB: environment.memoryMB,
+    ...(environment.idleTimeoutMinutes !== null ? { idleTimeoutMinutes: environment.idleTimeoutMinutes } : {}),
     ...(input.resolveHead ? { resolveHead: input.resolveHead } : {}),
   };
 }
